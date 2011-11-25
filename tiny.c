@@ -1,12 +1,13 @@
-#include <rio.h>
+#include <arpa/inet.h>          /* inet_ntoa */
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <rio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/sendfile.h>
-#include <arpa/inet.h>          /* inet_ntoa */
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -49,6 +50,39 @@ void client_error(int fd, int status, char *msg, char *longmsg) ;
 void serve_static(int out_fd, int in_fd, char* filename, long size) ;
 void log_access(int status, size_t size,
                 struct sockaddr_in *clientaddr, char*filename);
+
+void handle_directory_request(int out_fd, int dir_fd, char *filename) {
+    char buf[MAXLINE];
+    struct stat statbuf;
+    sprintf(buf, "HTTP/1.1 200 OK\r\n%s\r\n",
+            "Content-Type: text/html\r\n\r\n");
+    writen(out_fd, buf, strlen(buf));
+    DIR *d = fdopendir(dir_fd);
+    struct dirent *dp;
+    int ffd;
+    while ((dp = readdir(d)) != NULL) {
+        if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
+            continue;
+        }
+        if ((ffd = openat(dir_fd, dp->d_name, O_RDONLY)) == -1) {
+            perror(dp->d_name);
+            continue;
+        }
+        if (fstat(ffd, &statbuf) == 0) {
+            if(S_ISREG(statbuf.st_mode)) {
+                sprintf(buf, "<p><a href=\"%s\">%s</a></p>",
+                        dp->d_name, dp->d_name);
+            } else if (S_ISDIR(statbuf.st_mode)) {
+                sprintf(buf, "<p><a href=\"%s/\">%s</a></p>",
+                        dp->d_name, dp->d_name);
+            } else {
+                continue;
+            }
+            writen(out_fd, buf, strlen(buf));
+        }
+    }
+    closedir(d);
+}
 
 static const char* get_mime_type(char *filename) {
     char *dot = strrchr(filename, '.');
@@ -159,9 +193,7 @@ void process(int fd, struct sockaddr_in *clientaddr) {
             serve_static(fd, ffd, filename, sbuf.st_size);
         } else if(S_ISDIR(sbuf.st_mode)) {
             status = 200;
-            char *msg = "Directory listing is not implemented yet";
-            size = strlen(msg);
-            client_error(fd, status, "OK", msg);
+            handle_directory_request(fd, ffd, filename);
         } else {
             status = 400;
             char *msg = "Unknow Error";
@@ -183,6 +215,7 @@ void client_error(int fd, int status, char *msg, char *longmsg) {
     char buf[MAXLINE];
     sprintf(buf, "HTTP/1.1 %d %s\r\n", status, msg);
     sprintf(buf, "%sContent-length: %lu\r\n\r\n", buf, strlen(longmsg));
+    // TODO overlap, undefined, sad man page
     sprintf(buf, "%s%s", buf, longmsg);
     writen(fd, buf, strlen(buf));
 }

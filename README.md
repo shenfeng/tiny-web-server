@@ -10,7 +10,8 @@ I have written another
 
 ### Features
 1. Basic MIME mapping
-3. Very Low resource usage
+2. Very basic directory listing
+3. Very low resource usage
 4. [sendfile(2)](http://kernel.org/doc/man-pages/online/pages/man2/sendfile.2.html)
 
 ### non-features
@@ -21,6 +22,5 @@ Open a http server here
 like python -m SimpleHTTPServer, for daily use,  but should be faster.
 
 ### TODO
-1. Implement directory listing
-2. Implement byte-range for in browser MP4 playing
-4. write a epoll version for performance comparison with my JAVA version
+1. Implement byte-range for in browser MP4 playing
+2. write a epoll version for performance comparison with my JAVA version
