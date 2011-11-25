@@ -18,25 +18,55 @@
 /* Simplifies calls to bind(), connect(), and accept() */
 typedef struct sockaddr SA;
 
-struct {
-    char* method;
-    char* filename;
-    int start_byte;
-    int end_byte;
-} http_request;
+typedef struct {
+    const char *extension;
+    const char *mime_type;
+} mime_map;
+
+mime_map meme_types [] = {
+    {".css", "text/css"},
+    {".gif", "image/gif"},
+    {".gz", "application/x-gunzip"},
+    {".htm", "text/html"},
+    {".html", "text/html"},
+    {".jpeg", "image/jpeg"},
+    {".jpg", "image/jpeg"},
+    {".js", "application/javascript"},
+    {".mp4", "video/mp4"},
+    {".mp3", "audio/x-mp3"},
+    {".exe", "application/octet-stream"},
+    {".png", "image/png"},
+    {".svg", "image/svg+xml"},
+    {".xml", "text/xml"},
+    {NULL, NULL},
+};
+
+char *default_mime_type = "text/plain";
 
 int open_listenfd(int port);
 void process(int fd, struct sockaddr_in *clientaddr);
 void client_error(int fd, int status, char *msg, char *longmsg) ;
-void server_static(int out_fd, int in_fd, long size) ;
+void serve_static(int out_fd, int in_fd, char* filename, long size) ;
 void log_access(int status, size_t size,
                 struct sockaddr_in *clientaddr, char*filename);
 
+static const char* get_mime_type(char *filename) {
+    char *dot = strrchr(filename, '.');
+    if(dot) { // strrchar Locate last occurrence of character in string
+        mime_map *map = meme_types;
+        while(map->extension) {
+            if(strcmp(map->extension, dot) == 0) {
+                return map->mime_type;
+            }
+            map++;
+        }
+    }
+    return default_mime_type;
+}
+
 
 int main(int argc, char** argv) {
-
     struct sockaddr_in clientaddr;
-
     int default_port = 9999,
         listenfd,
         clientlen = sizeof clientaddr,
@@ -126,7 +156,7 @@ void process(int fd, struct sockaddr_in *clientaddr) {
         fstat(ffd, &sbuf);
         if(S_ISREG(sbuf.st_mode)) {
             size = sbuf.st_size;
-            server_static(fd, ffd ,sbuf.st_size);
+            serve_static(fd, ffd, filename, sbuf.st_size);
         } else if(S_ISDIR(sbuf.st_mode)) {
             status = 200;
             char *msg = "Directory listing is not implemented yet";
@@ -145,7 +175,7 @@ void process(int fd, struct sockaddr_in *clientaddr) {
 
 void log_access(int status, size_t size, struct sockaddr_in *clientaddr,
                 char *filename) {
-    printf("%s:%d %d - %d %s\n", inet_ntoa(clientaddr->sin_addr),
+    printf("%s:%d %d - %lu %s\n", inet_ntoa(clientaddr->sin_addr),
            ntohs(clientaddr->sin_port), status, size, filename);
 }
 
@@ -157,13 +187,12 @@ void client_error(int fd, int status, char *msg, char *longmsg) {
     writen(fd, buf, strlen(buf));
 }
 
-void server_static(int out_fd, int in_fd, long size) {
+void serve_static(int out_fd, int in_fd, char* filename, long size) {
     char buf[128];
     sprintf(buf, "HTTP/1.1 200 OK\r\n");
-    sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
     /* unsigned long: %lu */
     sprintf(buf, "%sContent-length: %lu\r\n", buf, size);
-    sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, "text/plain");
+    sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, get_mime_type(filename));
     writen(out_fd, buf, strlen(buf));
 
     long begin = 0;
