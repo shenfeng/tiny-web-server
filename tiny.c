@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <rio.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -141,6 +142,12 @@ int open_listenfd(int port){
                    (const void *)&optval , sizeof(int)) < 0)
         return -1;
 
+    // 6 is TCP's protocol number
+    // enable this, much faster : 4000 req/s -> 17000 req/s
+    if (setsockopt(listenfd, 6, TCP_CORK,
+                   (const void *)&optval , sizeof(int)) < 0)
+        return -1;
+
     /* Listenfd will be an endpoint for all requests to port
        on any IP address for this host */
     memset(&serveraddr, 0, sizeof(serveraddr));
@@ -214,9 +221,9 @@ void log_access(int status, size_t size, struct sockaddr_in *clientaddr,
 void client_error(int fd, int status, char *msg, char *longmsg) {
     char buf[MAXLINE];
     sprintf(buf, "HTTP/1.1 %d %s\r\n", status, msg);
-    sprintf(buf, "%sContent-length: %lu\r\n\r\n", buf, strlen(longmsg));
-    // TODO overlap, undefined, sad man page
-    sprintf(buf, "%s%s", buf, longmsg);
+    sprintf(buf + strlen(buf),
+            "Content-length: %lu\r\n\r\n", strlen(longmsg));
+    sprintf(buf + strlen(buf), "%s", longmsg);
     writen(fd, buf, strlen(buf));
 }
 
@@ -224,8 +231,9 @@ void serve_static(int out_fd, int in_fd, char* filename, long size) {
     char buf[128];
     sprintf(buf, "HTTP/1.1 200 OK\r\n");
     /* unsigned long: %lu */
-    sprintf(buf, "%sContent-length: %lu\r\n", buf, size);
-    sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, get_mime_type(filename));
+    sprintf(buf + strlen(buf), "Content-length: %lu\r\n", size);
+    sprintf(buf + strlen(buf), "Content-type: %s\r\n\r\n",
+            get_mime_type(filename));
     writen(out_fd, buf, strlen(buf));
 
     long begin = 0;

@@ -13,6 +13,7 @@ I have written another
 2. Very basic directory listing
 3. Very low resource usage
 4. [sendfile(2)](http://kernel.org/doc/man-pages/online/pages/man2/sendfile.2.html)
+5. Very fast, on i5 580m, 3.0.0-1-amd64, 18733.74 [#/sec], Document Length: 7156 bytes
 
 ### non-features
 1. No security check
