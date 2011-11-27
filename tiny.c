@@ -88,6 +88,7 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename) {
             }
             writen(out_fd, buf, strlen(buf));
         }
+        close(ffd);
     }
     closedir(d);
 }
