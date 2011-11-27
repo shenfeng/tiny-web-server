@@ -1,4 +1,5 @@
 #include <arpa/inet.h>          /* inet_ntoa */
+#include <signal.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -104,8 +105,8 @@ int main(int argc, char** argv) {
     struct sockaddr_in clientaddr;
     int default_port = 9999,
         listenfd,
-        clientlen = sizeof clientaddr,
         connfd;
+    socklen_t clientlen = sizeof clientaddr;
     if(argc == 2) {
         default_port = atoi(argv[1]);
     }
@@ -118,6 +119,9 @@ int main(int argc, char** argv) {
                 default_port, listenfd);
         exit(listenfd);
     }
+    // Ignore SIGPIPE signal, so if browser cancels the request, it
+    // won't kill the whole process.
+    signal(SIGPIPE, SIG_IGN);
 
     while(1) {
         connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
