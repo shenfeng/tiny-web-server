@@ -22,6 +22,12 @@
 typedef struct sockaddr SA;
 
 typedef struct {
+    char filename[512];
+    off_t offset;              /* for support Range */
+    size_t end;
+} http_request;
+
+typedef struct {
     const char *extension;
     const char *mime_type;
 } mime_map;
@@ -48,10 +54,10 @@ char *default_mime_type = "text/plain";
 
 int open_listenfd(int port);
 void process(int fd, struct sockaddr_in *clientaddr);
-void client_error(int fd, int status, char *msg, char *longmsg) ;
-void serve_static(int out_fd, int in_fd, char* filename, long size) ;
-void log_access(int status, size_t size,
-                struct sockaddr_in *clientaddr, char*filename);
+void client_error(int fd, int status, char *msg, char *longmsg);
+void serve_static(int out_fd, int in_fd, http_request *r, size_t total_size);
+void log_access(int status, struct sockaddr_in *c_addr, http_request *req);
+void parse_request(int fd, http_request *req);
 
 void handle_directory_request(int out_fd, int dir_fd, char *filename) {
     char buf[MAXLINE];
@@ -167,19 +173,21 @@ int open_listenfd(int port){
     return listenfd;
 }
 
-
-void process(int fd, struct sockaddr_in *clientaddr) {
+void parse_request(int fd, http_request *req) {
     rio_t rio;
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE];
+    req->offset = 0;
+    req->end = 0;              /* default */
 
     rio_readinitb(&rio, fd);
     rio_readlineb(&rio, buf, MAXLINE);
-
-    sscanf(buf, "%s %s %s", method, uri, version);
-
+    sscanf(buf, "%s %s", method, uri); /* version is not cared */
     /* read all */
     while(buf[0] != '\n' && buf[1] != '\n') { /* \n || \r\n */
         rio_readlineb(&rio, buf, MAXLINE);
+        if(buf[0] == 'R' && buf[1] == 'a' && buf[2] == 'n') {
+            sscanf(buf, "Range: bytes=%lu-%lu", &req->offset, &req->end);
+        }
     }
     char* filename = uri;
     if(uri[0] == '/') {
@@ -188,38 +196,45 @@ void process(int fd, struct sockaddr_in *clientaddr) {
             filename = ".";
         }
     }
+    strcpy(req->filename, filename);
+}
+
+void process(int fd, struct sockaddr_in *clientaddr) {
+    http_request req;
+    parse_request(fd, &req);
 
     struct stat sbuf;
-    int status = 200, size = 0;
-    int ffd = open(filename, O_RDONLY, 0);
+    int status = 200, ffd = open(req.filename, O_RDONLY, 0);
     if(ffd <= 0) {
         status = 404;
         char *msg = "File not found";
         client_error(fd, status, "Not found", msg);
-        size = strlen(msg);
     } else {
         fstat(ffd, &sbuf);
         if(S_ISREG(sbuf.st_mode)) {
-            size = sbuf.st_size;
-            serve_static(fd, ffd, filename, sbuf.st_size);
+            if (req.end == 0) {
+                req.end = sbuf.st_size;
+            }
+            if (req.offset > 0) {
+                status = 206;
+            }
+            serve_static(fd, ffd, &req, sbuf.st_size);
         } else if(S_ISDIR(sbuf.st_mode)) {
             status = 200;
-            handle_directory_request(fd, ffd, filename);
+            handle_directory_request(fd, ffd, req.filename);
         } else {
             status = 400;
             char *msg = "Unknow Error";
-            size = strlen(msg);
             client_error(fd, status, "Error", msg);
         }
     }
-    log_access(status, size, clientaddr, filename);
+    log_access(status, clientaddr, &req);
     close(ffd);
 }
 
-void log_access(int status, size_t size, struct sockaddr_in *clientaddr,
-                char *filename) {
-    printf("%s:%d %d - %lu %s\n", inet_ntoa(clientaddr->sin_addr),
-           ntohs(clientaddr->sin_port), status, size, filename);
+void log_access(int status, struct sockaddr_in *c_addr, http_request *req) {
+    printf("%s:%d %d - %s\n", inet_ntoa(c_addr->sin_addr),
+           ntohs(c_addr->sin_port), status, req->filename);
 }
 
 void client_error(int fd, int status, char *msg, char *longmsg) {
@@ -231,15 +246,26 @@ void client_error(int fd, int status, char *msg, char *longmsg) {
     writen(fd, buf, strlen(buf));
 }
 
-void serve_static(int out_fd, int in_fd, char* filename, long size) {
+void serve_static(int out_fd, int in_fd, http_request *req,
+                  size_t total_size) {
     char buf[128];
-    sprintf(buf, "HTTP/1.1 200 OK\r\n");
-    /* unsigned long: %lu */
-    sprintf(buf + strlen(buf), "Content-length: %lu\r\n", size);
+    if (req->offset > 0){
+        sprintf(buf, "HTTP/1.1 206 Partial\r\n");
+        sprintf(buf + strlen(buf), "Content-Range: bytes %lu-%lu/%lu\r\n",
+                req->offset, req->end, total_size);
+    } else {
+        sprintf(buf, "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\n");
+    }
+    sprintf(buf + strlen(buf), "Content-length: %lu\r\n",
+            req->end - req->offset);
     sprintf(buf + strlen(buf), "Content-type: %s\r\n\r\n",
-            get_mime_type(filename));
-    writen(out_fd, buf, strlen(buf));
+            get_mime_type(req->filename));
 
-    long begin = 0;
-    sendfile(out_fd, in_fd, &begin, size);
+    writen(out_fd, buf, strlen(buf));
+    off_t offset = req->offset; /* copy */
+    while(req->end >= offset) {
+        if(sendfile(out_fd, in_fd, &offset, req->end-req->offset) <= 0) {
+            break;
+        }
+    }
 }

@@ -11,17 +11,18 @@ I have written another
 ### Features
 1. Basic MIME mapping
 2. Very basic directory listing
-3. Very low resource usage
+3. Low resource usage
 4. [sendfile(2)](http://kernel.org/doc/man-pages/online/pages/man2/sendfile.2.html)
-5. Very fast, on i5 580m, 3.0.0-1-amd64, 18733.74 [#/sec], Document Length: 7156 bytes
+5. Support Accept-Ranges: bytes (for in browser MP4 playing)
 
 ### non-features
 1. No security check
+2. No concurrency
 
 ### Usage
 Open a http server here
 like python -m SimpleHTTPServer, for daily use,  but should be faster.
 
 ### TODO
-1. Implement byte-range for in browser MP4 playing
-2. write a epoll version for performance comparison with my JAVA version
+
+1. write a epoll version for performance comparison with my JAVA version
