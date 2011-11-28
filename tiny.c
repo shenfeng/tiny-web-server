@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <rio.h>
@@ -59,11 +60,32 @@ void serve_static(int out_fd, int in_fd, http_request *r, size_t total_size);
 void log_access(int status, struct sockaddr_in *c_addr, http_request *req);
 void parse_request(int fd, http_request *req);
 
+void format_size(char* buf, struct stat *stat) {
+    if(S_ISDIR(stat->st_mode)) {
+        sprintf(buf, "%s", "[DIR]");
+    } else {
+        off_t size = stat->st_size;
+        if(size < 1024) {
+            sprintf(buf, "%lu", size);
+        } else if (size < 1024 * 1024) {
+            sprintf(buf, "%.1fK", (double)size / 1024);
+        } else if (size < 1024 * 1024 * 1024) {
+            sprintf(buf, "%.1fM", (double)size / 1024 / 1024);
+        } else {
+            sprintf(buf, "%.1fG", (double)size / 1024 / 1024 / 1024);
+        }
+    }
+}
+
 void handle_directory_request(int out_fd, int dir_fd, char *filename) {
-    char buf[MAXLINE];
+    char buf[MAXLINE], m_time[32], size[16];
     struct stat statbuf;
-    sprintf(buf, "HTTP/1.1 200 OK\r\n%s\r\n",
-            "Content-Type: text/html\r\n\r\n");
+    sprintf(buf, "HTTP/1.1 200 OK\r\n%s%s%s%s%s",
+            "Content-Type: text/html\r\n\r\n",
+            "<html><head><style>",
+            "body{font-family: monospace; font-size: 13px;}",
+            "td {padding: 1.5px 6px;}",
+            "</style></head><body><table>\n");
     writen(out_fd, buf, strlen(buf));
     DIR *d = fdopendir(dir_fd);
     struct dirent *dp;
@@ -76,20 +98,20 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename) {
             perror(dp->d_name);
             continue;
         }
-        if (fstat(ffd, &statbuf) == 0) {
-            if(S_ISREG(statbuf.st_mode)) {
-                sprintf(buf, "<p><a href=\"%s\">%s</a></p>",
-                        dp->d_name, dp->d_name);
-            } else if (S_ISDIR(statbuf.st_mode)) {
-                sprintf(buf, "<p><a href=\"%s/\">%s</a></p>",
-                        dp->d_name, dp->d_name);
-            } else {
-                continue;
-            }
+        fstat(ffd, &statbuf);
+        strftime(m_time, sizeof(m_time),
+                 "%Y-%m-%d %H:%M", localtime(&statbuf.st_mtime));
+        format_size(size, &statbuf);
+        if(S_ISREG(statbuf.st_mode) || S_ISDIR(statbuf.st_mode)) {
+            char *d = S_ISDIR(statbuf.st_mode) ? "/" : "";
+            sprintf(buf, "<tr><td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%s</td></tr>\n",
+                    dp->d_name, d, dp->d_name, d, m_time, size);
             writen(out_fd, buf, strlen(buf));
         }
         close(ffd);
     }
+    sprintf(buf, "</table></body></html>");
+    writen(out_fd, buf, strlen(buf));
     closedir(d);
 }
 

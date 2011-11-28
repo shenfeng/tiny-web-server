@@ -29,6 +29,8 @@ Usage
 `tiny <port>`, opens a server in the current directory, port
 default to 9999, just like `python -m SimpleHTTPServer`
 
+I use it as a lightweight File Browser.
+
 
 TODO
 ----
