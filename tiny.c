@@ -359,8 +359,7 @@ int main(int argc, char** argv){
     if (listenfd > 0){
         printf("listen on port %d, fd is %d\n", default_port, listenfd);
     } else {
-        fprintf(stderr,"error listen on port %d, error code %d",
-                default_port, listenfd);
+        perror("ERROR");
         exit(listenfd);
     }
     // Ignore SIGPIPE signal, so if browser cancels the request, it
