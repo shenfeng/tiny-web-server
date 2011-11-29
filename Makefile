@@ -5,11 +5,8 @@ CFLAGS = -Wall -I . -O2
 
 all: tiny
 
-tiny: tiny.c rio.c rio.h
-	$(CC) $(CFLAGS) -o tiny tiny.c rio.c $(LIB)
-
-rio.o: rio.c rio.h
-	$(CC) $(CFLAGS) -c rio.c
+tiny: tiny.c
+	$(CC) $(CFLAGS) -o tiny tiny.c $(LIB)
 
 clean:
 	rm -f *.o tiny *~
