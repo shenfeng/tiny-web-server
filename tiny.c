@@ -48,9 +48,8 @@ mime_map meme_types [] = {
     {".jpeg", "image/jpeg"},
     {".jpg", "image/jpeg"},
     {".js", "application/javascript"},
+    {".pdf", "application/pdf"},
     {".mp4", "video/mp4"},
-    {".mp3", "audio/x-mp3"},
-    {".exe", "application/octet-stream"},
     {".png", "image/png"},
     {".svg", "image/svg+xml"},
     {".xml", "text/xml"},
@@ -272,10 +271,12 @@ void parse_request(int fd, http_request *req){
     rio_readlineb(&rio, buf, MAXLINE);
     sscanf(buf, "%s %s", method, uri); /* version is not cared */
     /* read all */
-    while(buf[0] != '\n' && buf[1] != '\n'){ /* \n || \r\n */
+    while(buf[0] != '\n' && buf[1] != '\n') { /* \n || \r\n */
         rio_readlineb(&rio, buf, MAXLINE);
         if(buf[0] == 'R' && buf[1] == 'a' && buf[2] == 'n'){
             sscanf(buf, "Range: bytes=%lu-%lu", &req->offset, &req->end);
+            // Range: [start, end]
+            if( req->end != 0) req->end ++;
         }
     }
     char* filename = uri;
@@ -321,7 +322,7 @@ void serve_static(int out_fd, int in_fd, http_request *req,
     writen(out_fd, buf, strlen(buf));
     off_t offset = req->offset; /* copy */
     while(offset < req->end){
-        if(sendfile(out_fd, in_fd, &offset, req->end-req->offset) <= 0){
+        if(sendfile(out_fd, in_fd, &offset, req->end - req->offset) <= 0) {
             break;
         }
     }

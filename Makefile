@@ -1,5 +1,5 @@
 CC = c99
-CFLAGS = -Wall -I . -O2
+CFLAGS = -Wall -O2
 
 # LIB = -lpthread
 
