@@ -247,6 +247,21 @@ int open_listenfd(int port){
     return listenfd;
 }
 
+void url_decode(char* src, char* dest, int max) {
+    char *p = src;
+    char code[3] = { 0 };
+    while(*p && --max) {
+        if(*p == '%') {
+            memcpy(code, ++p, 2);
+            *dest++ = (char)strtoul(code, NULL, 16);
+            p += 2;
+        } else {
+            *dest++ = *p++;
+        }
+    }
+    *dest = '\0';
+}
+
 void parse_request(int fd, http_request *req){
     rio_t rio;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE];
@@ -270,7 +285,7 @@ void parse_request(int fd, http_request *req){
             filename = ".";
         }
     }
-    strcpy(req->filename, filename);
+    url_decode(filename, req->filename, MAXLINE);
 }
 
 
