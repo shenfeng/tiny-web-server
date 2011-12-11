@@ -353,6 +353,12 @@ int main(int argc, char** argv){
     socklen_t clientlen = sizeof clientaddr;
     if(argc == 2){
         default_port = atoi(argv[1]);
+    } else if (argc == 3) {
+        default_port = atoi(argv[2]);
+        if(chdir(argv[1]) != 0) {
+            perror(argv[1]);
+            exit(1);
+        }
     }
 
     listenfd = open_listenfd(default_port);
