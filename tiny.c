@@ -366,11 +366,22 @@ int main(int argc, char** argv){
     int default_port = 9999,
         listenfd,
         connfd;
+    char buf[256];
+    char *path = getcwd(buf, 256);
     socklen_t clientlen = sizeof clientaddr;
-    if(argc == 2){
-        default_port = atoi(argv[1]);
+    if(argc == 2) {
+        if(argv[1][0] >= '0' && argv[1][0] <= '9') {
+            default_port = atoi(argv[1]);
+        } else {
+            path = argv[1];
+            if(chdir(argv[1]) != 0) {
+                perror(argv[1]);
+                exit(1);
+            }
+        }
     } else if (argc == 3) {
         default_port = atoi(argv[2]);
+        path = argv[1];
         if(chdir(argv[1]) != 0) {
             perror(argv[1]);
             exit(1);
@@ -378,8 +389,12 @@ int main(int argc, char** argv){
     }
 
     listenfd = open_listenfd(default_port);
-    if (listenfd > 0){
+    if (listenfd > 0) {
         printf("listen on port %d, fd is %d\n", default_port, listenfd);
+        char cmd[100];
+        sprintf(cmd, "echo -n \"\033]0; tiny: %d %s\007\"",
+                default_port, path);
+        system(cmd);
     } else {
         perror("ERROR");
         exit(listenfd);
