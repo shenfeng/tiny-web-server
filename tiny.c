@@ -47,6 +47,7 @@ mime_map meme_types [] = {
     {".html", "text/html"},
     {".jpeg", "image/jpeg"},
     {".jpg", "image/jpeg"},
+    {".ico", "image/x-icon"},
     {".js", "application/javascript"},
     {".pdf", "application/pdf"},
     {".mp4", "video/mp4"},
@@ -391,10 +392,6 @@ int main(int argc, char** argv){
     listenfd = open_listenfd(default_port);
     if (listenfd > 0) {
         printf("listen on port %d, fd is %d\n", default_port, listenfd);
-        char cmd[100];
-        sprintf(cmd, "echo -n \"\033]0; tiny: %d %s\007\"",
-                default_port, path);
-        system(cmd);
     } else {
         perror("ERROR");
         exit(listenfd);
