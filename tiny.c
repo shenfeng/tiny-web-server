@@ -283,8 +283,16 @@ void parse_request(int fd, http_request *req){
     char* filename = uri;
     if(uri[0] == '/'){
         filename = uri + 1;
-        if (strlen(filename) == 0){
+        int length = strlen(filename);
+        if (length == 0){
             filename = ".";
+        } else {
+            for (int i = 0; i < length; ++ i) {
+                if (filename[i] == '?') {
+                    filename[i] = '\0';
+                    break;
+                }
+            }
         }
     }
     url_decode(filename, req->filename, MAXLINE);
@@ -307,7 +315,7 @@ void client_error(int fd, int status, char *msg, char *longmsg){
 
 void serve_static(int out_fd, int in_fd, http_request *req,
                   size_t total_size){
-    char buf[128];
+    char buf[256];
     if (req->offset > 0){
         sprintf(buf, "HTTP/1.1 206 Partial\r\n");
         sprintf(buf + strlen(buf), "Content-Range: bytes %lu-%lu/%lu\r\n",
@@ -315,6 +323,9 @@ void serve_static(int out_fd, int in_fd, http_request *req,
     } else {
         sprintf(buf, "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\n");
     }
+    sprintf(buf + strlen(buf), "Cache-Control: no-cache\r\n");
+    // sprintf(buf + strlen(buf), "Cache-Control: public, max-age=315360000\r\nExpires: Thu, 31 Dec 2037 23:55:55 GMT\r\n");
+
     sprintf(buf + strlen(buf), "Content-length: %lu\r\n",
             req->end - req->offset);
     sprintf(buf + strlen(buf), "Content-type: %s\r\n\r\n",
@@ -326,10 +337,14 @@ void serve_static(int out_fd, int in_fd, http_request *req,
         if(sendfile(out_fd, in_fd, &offset, req->end - req->offset) <= 0) {
             break;
         }
+        printf("offset: %d \n\n", offset);
+        close(out_fd);
+        break;
     }
 }
 
 void process(int fd, struct sockaddr_in *clientaddr){
+    printf("accept request, fd is %d, pid is %d\n", fd, getpid());
     http_request req;
     parse_request(fd, &req);
 
@@ -399,6 +414,21 @@ int main(int argc, char** argv){
     // Ignore SIGPIPE signal, so if browser cancels the request, it
     // won't kill the whole process.
     signal(SIGPIPE, SIG_IGN);
+
+    for(int i = 0; i < 10; i++) {
+        int pid = fork();
+        if (pid == 0) {         //  child
+            while(1){
+                connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+                process(connfd, &clientaddr);
+                close(connfd);
+            }
+        } else if (pid > 0) {   //  parent
+            printf("child pid is %d\n", pid);
+        } else {
+            perror("fork");
+        }
+    }
 
     while(1){
         connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
