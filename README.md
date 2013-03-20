@@ -16,12 +16,12 @@ Features
 3. Low resource usage
 4. [sendfile(2)](http://kernel.org/doc/man-pages/online/pages/man2/sendfile.2.html)
 5. Support Accept-Ranges: bytes (for in browser MP4 playing)
+6. Concurrency by pre-fork
 
 Non-features
 ------------
 
 1. No security check
-2. No concurrency
 
 Usage
 -----
