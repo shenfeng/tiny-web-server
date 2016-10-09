@@ -337,7 +337,7 @@ void serve_static(int out_fd, int in_fd, http_request *req,
         if(sendfile(out_fd, in_fd, &offset, req->end - req->offset) <= 0) {
             break;
         }
-        printf("offset: %d \n\n", offset);
+        printf("offset: %li \n\n", offset);
         close(out_fd);
         break;
     }
@@ -382,14 +382,11 @@ int main(int argc, char** argv){
     int default_port = 9999,
         listenfd,
         connfd;
-    char buf[256];
-    char *path = getcwd(buf, 256);
     socklen_t clientlen = sizeof clientaddr;
     if(argc == 2) {
         if(argv[1][0] >= '0' && argv[1][0] <= '9') {
             default_port = atoi(argv[1]);
         } else {
-            path = argv[1];
             if(chdir(argv[1]) != 0) {
                 perror(argv[1]);
                 exit(1);
@@ -397,7 +394,6 @@ int main(int argc, char** argv){
         }
     } else if (argc == 3) {
         default_port = atoi(argv[2]);
-        path = argv[1];
         if(chdir(argv[1]) != 0) {
             perror(argv[1]);
             exit(1);
